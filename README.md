@@ -2,6 +2,21 @@
 
 ETL pipeline that ingests TripAdvisor attractions reviews, cleans and models data into Bronze/Silver/Gold layers, and writes results locally or to GCP (GCS) depending on environment.
 
+## Data Model & Data Architecture
+The dimensional modeling for `fact_reviews` (user reviews) and `dim_attractions` is implemented directly in `main.py` and is a many-to-one relationship.
+
+```mermaid
+flowchart LR
+A[(GCS RAW Bucket)] --> B[Dataproc PySpark ETL]
+
+B --> C[(GCS BRONZE)]
+C --> D[(GCS SILVER)]
+D --> E[(GCS GOLD)]
+D --> F[(GCS INVALID)]
+
+E --> G[Analytics / BI / ML]
+```
+
 ## Project Goals
 - Ingest raw CSV reviews for tourist attractions.
 - Normalize and clean fields (dates, ratings, null handling).
@@ -70,8 +85,6 @@ set APP_ENV=gcp
 3. Upload raw data to the raw bucket (path configured in `project_config.py`).
 4. Run the job where Spark + GCP connectors are available.
 
-## Data Model
-The dimensional modeling for `fact_reviews` (user reviews) and `dim_attractions` is implemented directly in `main.py` and is a many-to-one relationship.
 ### Bronze
 Cleaned raw data with basic validation and normalized types.
 
