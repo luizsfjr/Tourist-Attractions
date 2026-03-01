@@ -12,7 +12,7 @@ if IS_GCP:
     BRONZE = "gs://gcp-lc-datalakehouse-bronze"
     SILVER = "gs://gcp-lc-datalakehouse-silver"
     GOLD = "gs://gcp-lc-datalakehouse-gold"
-    INVALID = "gs://gcp-datalakehouse-invalid"
+    INVALID = "gs://gcp-lc-datalakehouse-invalid"
 else:
     # Local filesystem paths
     RAW = "data/raw"
