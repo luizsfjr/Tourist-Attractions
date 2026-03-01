@@ -1,6 +1,7 @@
 # ingestion.py
 import os
 from google.cloud import storage
+import project_config
 
 
 def getenv_required(name: str) -> str:
@@ -26,19 +27,24 @@ def upload_file_to_gcs(
     )
 
 
-if __name__ == "__main__":
-    # Required parameters
-    PROJECT_ID = getenv_required("PROJECT_ID")
-    RAW_BUCKET = getenv_required("RAW_BUCKET")  # example: gcp-datalakehouse-raw-3
-    SOURCE_FILE_PATH = os.getenv("SOURCE_FILE_PATH", "data/raw/Attraction_Belem.csv")
-    DESTINATION_BLOB_PATH = os.getenv(
-        "DESTINATION_BLOB_PATH",
-        "Attraction_Belem.csv",  # object path inside bucket
-    )
+def run_ingestion():
+    if(project_config.IS_GCP):
+        # Required parameters
+        PROJECT_ID = getenv_required("PROJECT_ID")
+        RAW_BUCKET = getenv_required("RAW_BUCKET")  # example: gcp-datalakehouse-raw-3
+        SOURCE_FILE_PATH = os.getenv("SOURCE_FILE_PATH", "data/raw/Attraction_Belem.csv")
+        DESTINATION_BLOB_PATH = os.getenv(
+            "DESTINATION_BLOB_PATH",
+            "Attraction_Belem.csv",  # object path inside bucket
+        )
 
-    upload_file_to_gcs(
-        project_id=PROJECT_ID,
-        bucket_name=RAW_BUCKET,
-        source_file_path=SOURCE_FILE_PATH,
-        destination_blob_path=DESTINATION_BLOB_PATH,
-    )
+        upload_file_to_gcs(
+            project_id=PROJECT_ID,
+            bucket_name=RAW_BUCKET,
+            source_file_path=SOURCE_FILE_PATH,
+            destination_blob_path=DESTINATION_BLOB_PATH,
+        )
+    else:
+        print("Local execution!")
+if __name__ == "__main__":
+    run_ingestion()
