@@ -1,124 +1,85 @@
-# Tourist Attractions ETL (PySpark + GCP)
+# Tourist Attractions Pipeline (Pandas + Cloud Run + GCS)
 
-ETL pipeline that ingests TripAdvisor attractions reviews, cleans and models data into Bronze/Silver/Gold layers, and writes results locally or to GCP (GCS) depending on environment.
+This branch focuses on a modular data pipeline that runs on GCP with:
+- Cloud Run Jobs
+- Docker
+- Pandas
+- Google Cloud Storage (GCS)
 
-## Data Model & Data Architecture
-The dimensional modeling for `fact_reviews` (user reviews) and `dim_attractions` is implemented directly in `main.py` and is a many-to-one relationship.
+## Branch Purpose
+Run an ingestion and transformation pipeline in modular steps:
+1. Upload raw CSV to GCS (`ingestion.py`)
+2. Transform and validate data with pandas (`transform.py`)
+3. Orchestrate both steps (`main_pandas.py`)
 
+## Architecture
 ```mermaid
 flowchart LR
-A[(GCS RAW Bucket)] --> B[Dataproc PySpark ETL]
-
-B --> C[(GCS BRONZE)]
-C --> D[(GCS SILVER)]
-D --> E[(GCS GOLD)]
-D --> F[(GCS INVALID)]
-
-E --> G[Analytics / BI / ML]
+A[Cloud Run Job: main_pandas.py] --> B[ingestion.py]
+B --> C[(GCS RAW)]
+A --> D[transform.py]
+D --> E[(GCS BRONZE)]
+D --> F[(GCS SILVER)]
+D --> G[(GCS GOLD)]
+D --> H[(GCS INVALID)]
 ```
-
-## Project Goals
-- Ingest raw CSV reviews for tourist attractions.
-- Normalize and clean fields (dates, ratings, null handling).
-- Build dimensional model:
-  - `dim_attractions` (attraction attributes)
-  - `fact_reviews` (user reviews)
-- Apply data quality rules and separate invalid records.
-- Write outputs to local filesystem or GCS buckets.
 
 ## Repository Structure
-- `main.py`: ETL pipeline (Spark).
-- `project_config.py`: environment detection and storage paths.
-- `data/raw/`: raw CSV input.
-- `data/bronze/`, `data/silver/`, `data/gold/`, `data/invalid/`: local outputs (when running locally).
-- `data/processed/`: example processed CSVs (legacy/manual exports).
+- `main_pandas.py`: pipeline orchestrator (ingestion then transform)
+- `ingestion.py`: uploads `Attraction_Belem.csv` to RAW bucket
+- `transform.py`: pandas transformations and data quality checks
+- `project_config.py`: local/GCP environment detection and paths
+- `data/raw/Attraction_Belem.csv`: source file used by ingestion
+- `Dockerfile`: container entrypoint for Cloud Run Job
 
-## Environment Detection
-The pipeline auto-detects the runtime:
-- Local by default.
-- GCP if `APP_ENV=gcp` is set or common GCP env vars are present.
+## Data Layers
+- Bronze: cleaned records from raw input
+- Silver:
+  - `dim_attractions`
+  - `fact_reviews`
+- Gold: valid records only
+- Invalid: records that fail validation rules
 
-You can override explicitly:
-```
-set APP_ENV=gcp
-```
+## Environment Configuration
+`project_config.py` switches paths automatically:
+- local: filesystem paths under `data/...`
+- gcp: bucket paths (`gs://...`) when `APP_ENV=gcp` or GCP runtime vars are present
 
-On GCP, outputs go to the GCS buckets defined in `project_config.py`.  
-Locally, outputs go to `data/bronze`, `data/silver`, `data/gold`, `data/invalid`.
-
-## Requirements
-- Python 3.9+
-- Java 8+ (required for Spark)
-- PySpark
-
-If you use a virtual environment:
-```
-python -m venv venv
-venv\Scripts\activate
-pip install pyspark
+## Local Run
+```bash
+python main_pandas.py
 ```
 
-## Running Locally
-1. Place your raw file at:
-   - `data/raw/Attraction_Belem.csv`
-2. Run:
+## Cloud Run Job (GCP) Summary
+1. Build image with Cloud Build (`gcloud builds submit`)
+2. Create/update Cloud Run Job using the built image
+3. Set env vars, including:
+   - `APP_ENV=gcp`
+   - `PROJECT_ID`
+   - `RAW_BUCKET`
+   - `SOURCE_FILE_PATH`
+   - `DESTINATION_BLOB_PATH`
+4. Execute job and inspect logs/executions
+
+## Required Dependencies
+- Python 3.11+
+- `pandas`
+- `google-cloud-storage`
+
+Install with:
+```bash
+pip install -r requirements.txt
 ```
-python main.py
-```
 
-If Spark complains about master/local mode, uncomment in `main.py`:
-```
-.master("local[*]")
-```
-
-## Running on GCP
-1. Ensure buckets exist:
-   - `gs://gcp-datalakehouse-raw-3`
-   - `gs://gcp-datalakehouse-bronze-3`
-   - `gs://gcp-datalakehouse-silver-3`
-   - `gs://gcp-datalakehouse-gold-3`
-   - `gs://gcp-datalakehouse-invalid-3`
-2. Set:
-```
-set APP_ENV=gcp
-```
-3. Upload raw data to the raw bucket (path configured in `project_config.py`).
-4. Run the job where Spark + GCP connectors are available.
-
-### Bronze
-Cleaned raw data with basic validation and normalized types.
-
-### Silver
-- `dim_attractions`:
-  - `Attraction_id`, `Name`, `Rating_Attraction`
-- `fact_reviews`:
-  - Review data joined to `dim_attractions`
-
-### Gold
-Validated records only (rules described below).
-
-### Invalid
-Records that failed quality checks.
-
-## Data Quality Rules
-### `dim_attractions`
+## Validation Rules
+`dim_attractions`
 - `Attraction_id` required and unique
-- `Rating_Attraction` must be positive and <= 50
 - `Name` required
+- `Rating_Attraction` must be in valid range
 
-### `fact_reviews`
+`fact_reviews`
 - `Username` required
-- `Rating_Review` in (0, 50]
 - `Review` required
 - `Date_Travel` required
-- `Type_traveler` in {`couples`, `families`, `alone`, `business`, `friends`}
-
-## Notes
-- Month parsing is in Portuguese (e.g., `janeiro`, `fevereiro`, `marco`).
-- Output format is Parquet.
-- If you want CSV exports locally, you can add an explicit `toPandas().to_csv(...)` step.
-
-## Troubleshooting
-- If `JAVA_HOME` is missing, Spark will fail to start.
-- If paths are wrong, verify `project_config.py` and the presence of `data/raw/Attraction_Belem.csv`.
-- If you see encoding issues in month names, ensure the input CSV is UTF-8.
+- `Rating_Review` must be in valid range
+- `Type_traveler` must be one of: `couples`, `families`, `alone`, `business`, `friends`
